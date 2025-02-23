@@ -1,1 +1,2 @@
 # decimal-rs
+Rust decimal

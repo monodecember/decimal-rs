@@ -1,21 +1,51 @@
+use std::ops::Add;
+
+use crate::bigint::BigInt;
+
+const DEFAULT_PRECISION: usize = 28;
+
+#[derive(Debug)]
 pub struct Decimal {
-    num: Vec<String>,
-    prec: usize // precision
+    sign: bool,
+    num: BigInt,
+    exponent: usize,
+    // 정확도 문제부터 수정하자. 그냥 + 연산으로만 구현하면 28로 지정되면 그 정확도로 ㄱㄱ
+    pub prec: usize, // 정확도가 있어야하는 이유는 자원의 한계 때문이다.
 }
 
 impl Decimal {
-    pub fn new() -> Self {
-        Self { num: Vec::new(), prec: 0 }
+    pub fn new(prec: usize) -> Self {
+        // 여기서는 `0` 이 만들어지는 것이 아니다
+        Self { sign: false, num: BigInt::new(), exponent: 0, prec}
     }
 
-    pub fn from(s: &str, prec: usize) -> Self {
-        Self { num: to_decimal(s), prec }
-    }
+    // pub fn from(s: &str, prec: usize) -> Self {
+    //     let v: Vec<String> = to_decimal(s);
+
+    //     Self {
+    //         sign: v[0].parse::<bool>().expect("Not a valid sign."),
+    //         num: BigInt::from(&v[1]),
+    //         exponent: v[2].parse::<usize>().expect("Not a valid exponent."),
+    //         prec
+    //     }
+    // }
 
     pub fn debug_display(&self) {
-        println!("num: {:?}, prec: {}", &self.num, &self.prec);
+        // BigInt 에서 `.to_string()` 을 구현하고, 다시 작성하자.
+        println!("num: {}{:?}, prec: {}", &self.sign, &self.num, &self.prec);
     }
 }
+
+// impl Add for Decimal {
+//     type Output = Decimal;
+
+//     fn add(self, rhs: Self) -> Self::Output {
+//         let big_prec = if self.prec > rhs.prec {self.prec} else {rhs.prec};
+//         let mut result = Decimal::new(big_prec);
+
+//         result
+//     }
+// }
 
 // fn is_decimal(s: String) -> bool {
 //     let mut result: bool = true;

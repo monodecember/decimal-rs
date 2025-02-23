@@ -1,2 +1,2 @@
-pub mod bigu;
+pub mod bigint;
 pub mod decimal;
