@@ -138,4 +138,100 @@ mod tests {
     fn test_from_panics_on_invalid() {
         let _bi = BigInt::from("abc");
     }
+
+    // Edge case tests
+    #[test]
+    fn test_add_zero() {
+        let bi1 = BigInt::from("0");
+        let bi2 = BigInt::from("0");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_add_zero_to_number() {
+        let bi1 = BigInt::from("12345");
+        let bi2 = BigInt::from("0");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("12345"));
+    }
+
+    #[test]
+    fn test_add_number_to_zero() {
+        let bi1 = BigInt::from("0");
+        let bi2 = BigInt::from("67890");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("67890"));
+    }
+
+    #[test]
+    fn test_add_with_multiple_carries() {
+        let bi1 = BigInt::from("999");
+        let bi2 = BigInt::from("1");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("1000"));
+    }
+
+    #[test]
+    fn test_add_carry_chain() {
+        let bi1 = BigInt::from("9999999");
+        let bi2 = BigInt::from("1");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("10000000"));
+    }
+
+    #[test]
+    fn test_add_single_digits() {
+        let bi1 = BigInt::from("5");
+        let bi2 = BigInt::from("3");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("8"));
+    }
+
+    #[test]
+    fn test_add_single_digit_with_carry() {
+        let bi1 = BigInt::from("7");
+        let bi2 = BigInt::from("8");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("15"));
+    }
+
+    #[test]
+    fn test_add_large_numbers() {
+        let bi1 = BigInt::from("123456789012345678901234567890");
+        let bi2 = BigInt::from("987654321098765432109876543210");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("1111111110111111111011111111100"));
+    }
+
+    #[test]
+    fn test_add_very_different_lengths() {
+        let bi1 = BigInt::from("1");
+        let bi2 = BigInt::from("123456789012345");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("123456789012346"));
+    }
+
+    #[test]
+    fn test_add_same_numbers() {
+        let bi1 = BigInt::from("555");
+        let bi2 = BigInt::from("555");
+        let bi3 = bi1 + bi2;
+        assert_eq!(bi3, BigInt::from("1110"));
+    }
+
+    #[test]
+    fn test_new_creates_empty() {
+        let bi = BigInt::new();
+        assert_eq!(bi.num.len(), 0);
+    }
+
+    #[test]
+    fn test_add_with_new() {
+        let bi1 = BigInt::new();
+        let bi2 = BigInt::from("42");
+        let bi3 = bi1 + bi2;
+        // Empty BigInt (no digits) + 42 should give 42
+        assert_eq!(bi3, BigInt::from("42"));
+    }
 }

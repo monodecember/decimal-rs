@@ -19,3 +19,41 @@ impl Decimal {
         println!("num: {}{:?}, prec: {}", &self.sign, &self.num, &self.prec);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decimal_new() {
+        let dec = Decimal::new(10);
+        assert_eq!(dec.prec, 10);
+    }
+
+    #[test]
+    fn test_decimal_default_values() {
+        let dec = Decimal::new(28);
+        assert_eq!(dec.sign, false);
+        assert_eq!(dec.exponent, 0);
+        assert_eq!(dec.prec, 28);
+    }
+
+    #[test]
+    fn test_decimal_new_with_zero_precision() {
+        let dec = Decimal::new(0);
+        assert_eq!(dec.prec, 0);
+        assert_eq!(dec.sign, false);
+    }
+
+    #[test]
+    fn test_decimal_new_with_large_precision() {
+        let dec = Decimal::new(100);
+        assert_eq!(dec.prec, 100);
+    }
+
+    #[test]
+    fn test_decimal_uses_default_precision_constant() {
+        // Verify the constant exists and has expected value
+        assert_eq!(DEFAULT_PRECISION, 28);
+    }
+}
