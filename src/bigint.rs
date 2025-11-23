@@ -935,6 +935,128 @@ impl BigInt {
         }
         (self.clone() * other.clone()) / self.gcd(other)
     }
+
+    /// Formats the number with thousand separators.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from("1234567890");
+    /// assert_eq!(num.to_string_with_separator(','), "1,234,567,890");
+    /// ```
+    pub fn to_string_with_separator(&self, separator: char) -> String {
+        let s = format!("{}", self);
+        let mut result = String::new();
+        let chars: Vec<char> = s.chars().collect();
+
+        for (i, &c) in chars.iter().enumerate() {
+            if i > 0 && (chars.len() - i) % 3 == 0 {
+                result.push(separator);
+            }
+            result.push(c);
+        }
+
+        result
+    }
+
+    /// Converts the number to the specified radix (base).
+    ///
+    /// # Arguments
+    ///
+    /// * `radix` - The base to convert to (2-36)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `radix` is not in the range 2-36.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(255_u64);
+    /// assert_eq!(num.to_string_radix(16), "ff");
+    /// assert_eq!(num.to_string_radix(2), "11111111");
+    /// ```
+    pub fn to_string_radix(&self, radix: u32) -> String {
+        assert!(radix >= 2 && radix <= 36, "Radix must be in range 2-36");
+
+        if self.is_zero() {
+            return "0".to_string();
+        }
+
+        const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+
+        let mut result = Vec::new();
+        let mut num = self.clone();
+        let radix_bigint = BigInt::from(radix as u64);
+
+        while !num.is_zero() {
+            let remainder = num.clone() % radix_bigint.clone();
+            // Convert BigInt remainder to u8
+            let digit = if remainder.num.is_empty() {
+                0
+            } else if remainder.num.len() == 1 {
+                remainder.num[0]
+            } else {
+                // Multi-digit remainder, convert to number
+                let mut val = 0u8;
+                for &d in &remainder.num {
+                    val = val * 10 + d;
+                }
+                val
+            };
+            result.push(DIGITS[digit as usize] as char);
+            num = num / radix_bigint.clone();
+        }
+
+        result.reverse();
+        result.iter().collect()
+    }
+
+    /// Returns a scientific notation string (e.g., "1.23e5").
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(123000_u64);
+    /// assert_eq!(num.to_scientific_notation(), "1.23e5");
+    ///
+    /// let small = BigInt::from(42_u64);
+    /// assert_eq!(small.to_scientific_notation(), "4.2e1");
+    /// ```
+    pub fn to_scientific_notation(&self) -> String {
+        if self.is_zero() {
+            return "0e0".to_string();
+        }
+
+        let s = format!("{}", self);
+        let len = s.len();
+
+        if len == 1 {
+            return format!("{}e0", s);
+        }
+
+        // Format as: first_digit.remaining_digits e (len-1)
+        let mut result = String::new();
+        result.push(s.chars().next().unwrap());
+
+        // Add decimal point and remaining significant digits
+        let remaining: String = s.chars().skip(1).take_while(|&c| c != '0').collect();
+        if !remaining.is_empty() {
+            result.push('.');
+            result.push_str(&remaining);
+        }
+
+        result.push('e');
+        result.push_str(&(len - 1).to_string());
+
+        result
+    }
 }
 
 impl Default for BigInt {
