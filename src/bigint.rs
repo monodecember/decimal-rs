@@ -137,6 +137,38 @@ impl From<u64> for BigInt {
     }
 }
 
+impl From<u8> for BigInt {
+    /// Converts a `u8` to a `BigInt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(255_u8);
+    /// assert_eq!(num, BigInt::from("255"));
+    /// ```
+    fn from(n: u8) -> Self {
+        Self::from(n as u64)
+    }
+}
+
+impl From<u16> for BigInt {
+    /// Converts a `u16` to a `BigInt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(65535_u16);
+    /// assert_eq!(num, BigInt::from("65535"));
+    /// ```
+    fn from(n: u16) -> Self {
+        Self::from(n as u64)
+    }
+}
+
 impl From<u32> for BigInt {
     /// Converts a `u32` to a `BigInt`.
     ///
@@ -200,6 +232,48 @@ impl TryFrom<i64> for BigInt {
             ));
         }
         Ok(Self::from(n as u64))
+    }
+}
+
+impl TryFrom<i8> for BigInt {
+    type Error = DecimalError;
+
+    /// Tries to convert an `i8` to a `BigInt`.
+    ///
+    /// Returns an error if the number is negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let num = BigInt::try_from(127_i8).unwrap();
+    /// assert_eq!(num, BigInt::from(127_u64));
+    /// ```
+    fn try_from(n: i8) -> Result<Self, Self::Error> {
+        Self::try_from(n as i64)
+    }
+}
+
+impl TryFrom<i16> for BigInt {
+    type Error = DecimalError;
+
+    /// Tries to convert an `i16` to a `BigInt`.
+    ///
+    /// Returns an error if the number is negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let num = BigInt::try_from(32767_i16).unwrap();
+    /// assert_eq!(num, BigInt::from(32767_u64));
+    /// ```
+    fn try_from(n: i16) -> Result<Self, Self::Error> {
+        Self::try_from(n as i64)
     }
 }
 
@@ -1056,6 +1130,199 @@ impl BigInt {
         result.push_str(&(len - 1).to_string());
 
         result
+    }
+
+    /// Returns the number of digits in the number.
+    ///
+    /// Note: Zero has length 0 (empty internal representation).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u64);
+    /// assert_eq!(num.len(), 5);
+    /// ```
+    pub fn len(&self) -> usize {
+        self.num.len()
+    }
+
+    /// Returns `true` if the internal representation is empty.
+    ///
+    /// Note: `BigInt::new()` creates an empty representation, but
+    /// `BigInt::from(0_u64)` creates `vec![0]`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let zero = BigInt::new();
+    /// assert!(zero.is_empty());
+    ///
+    /// let num = BigInt::from(42_u64);
+    /// assert!(!num.is_empty());
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        self.num.is_empty()
+    }
+
+    /// Returns the individual digits of the number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u64);
+    /// assert_eq!(num.digits(), &[1, 2, 3, 4, 5]);
+    /// ```
+    pub fn digits(&self) -> &[u8] {
+        &self.num
+    }
+
+    /// Returns the maximum of two numbers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(42_u64);
+    /// let b = BigInt::from(100_u64);
+    /// assert_eq!(BigInt::max(a, b), BigInt::from(100_u64));
+    /// ```
+    pub fn max(self, other: Self) -> Self {
+        if self >= other {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// Returns the minimum of two numbers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(42_u64);
+    /// let b = BigInt::from(100_u64);
+    /// assert_eq!(BigInt::min(a, b), BigInt::from(42_u64));
+    /// ```
+    pub fn min(self, other: Self) -> Self {
+        if self <= other {
+            self
+        } else {
+            other
+        }
+    }
+
+    /// Clamps the value within a range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(150_u64);
+    /// let min = BigInt::from(0_u64);
+    /// let max = BigInt::from(100_u64);
+    /// assert_eq!(num.clamp(min, max), BigInt::from(100_u64));
+    /// ```
+    pub fn clamp(self, min: Self, max: Self) -> Self {
+        assert!(min <= max, "min must be less than or equal to max");
+        if self < min {
+            min
+        } else if self > max {
+            max
+        } else {
+            self
+        }
+    }
+
+    /// Returns the absolute value (no-op for unsigned BigInt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(42_u64);
+    /// assert_eq!(num.abs(), BigInt::from(42_u64));
+    /// ```
+    pub fn abs(self) -> Self {
+        self // BigInt is always non-negative
+    }
+
+    /// Computes the factorial of this number.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number is too large (> 100000 for safety).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(5_u64);
+    /// assert_eq!(num.factorial(), BigInt::from(120_u64));
+    ///
+    /// let zero = BigInt::from(0_u64);
+    /// assert_eq!(zero.factorial(), BigInt::from(1_u64));
+    /// ```
+    pub fn factorial(&self) -> Self {
+        if self.is_zero() || self.is_one() {
+            return BigInt::one();
+        }
+
+        // Safety check to prevent extremely long computations
+        if self > &BigInt::from(100000_u64) {
+            panic!("Factorial input too large (max 100000)");
+        }
+
+        let mut result = BigInt::one();
+        let mut i = BigInt::from(2_u64);
+        let mut current = self.clone();
+
+        while i <= current {
+            result = result * i.clone();
+            i = i + BigInt::one();
+        }
+
+        result
+    }
+
+    /// Converts the number to a byte vector (big-endian BCD).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u64);
+    /// assert_eq!(num.to_bytes(), vec![1, 2, 3, 4, 5]);
+    /// ```
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.num.clone()
+    }
+
+    /// Creates a BigInt from a byte vector (big-endian BCD).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let bytes = vec![1, 2, 3, 4, 5];
+    /// let num = BigInt::from_bytes(&bytes);
+    /// assert_eq!(num, BigInt::from(12345_u64));
+    /// ```
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        BigInt { num: bytes.to_vec() }
     }
 }
 
