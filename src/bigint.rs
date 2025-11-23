@@ -6,7 +6,7 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, Shl, Shr};
+use std::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, Shl, Shr, Neg};
 use std::str::FromStr;
 use crate::DecimalError;
 
@@ -602,6 +602,40 @@ impl SubAssign for BigInt {
     }
 }
 
+impl Neg for BigInt {
+    type Output = BigInt;
+
+    /// Negates the number (changes its sign).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(42_i64);
+    /// assert_eq!(-a, BigInt::from(-42_i64));
+    ///
+    /// let b = BigInt::from(-10_i64);
+    /// assert_eq!(-b, BigInt::from(10_i64));
+    /// ```
+    fn neg(self) -> Self::Output {
+        // Negating zero returns zero (stay positive)
+        if self.is_zero() {
+            return self;
+        }
+
+        // Flip the sign
+        BigInt {
+            sign: if self.sign == Sign::Plus {
+                Sign::Minus
+            } else {
+                Sign::Plus
+            },
+            num: self.num,
+        }
+    }
+}
+
 impl Mul for BigInt {
     type Output = BigInt;
 
@@ -771,6 +805,10 @@ impl Div for BigInt {
     /// let b = BigInt::from(7_u64);
     /// let c = a / b;
     /// assert_eq!(c, BigInt::from(14_u64));
+    ///
+    /// let d = BigInt::from(-100_i64);
+    /// let e = BigInt::from(7_i64);
+    /// assert_eq!(d / e, BigInt::from(-14_i64));
     /// ```
     fn div(self, rhs: Self) -> Self::Output {
         // Check for division by zero
@@ -783,38 +821,50 @@ impl Div for BigInt {
             return BigInt::from(0_u64);
         }
 
-        // If divisor is larger, result is 0
-        if self < rhs {
+        // Determine result sign: same signs -> positive, different signs -> negative
+        let result_sign = if self.sign == rhs.sign {
+            Sign::Plus
+        } else {
+            Sign::Minus
+        };
+
+        // Work with magnitudes only
+        let self_mag = BigInt { sign: Sign::Plus, num: self.num.clone() };
+        let rhs_mag = BigInt { sign: Sign::Plus, num: rhs.num.clone() };
+
+        // If divisor magnitude is larger, result is 0
+        if self_mag.compare_magnitude(&rhs_mag) == Ordering::Less {
             return BigInt::from(0_u64);
         }
 
-        // If equal, result is 1
-        if self == rhs {
-            return BigInt::from(1_u64);
+        // If magnitudes equal, result is ±1
+        if self_mag.compare_magnitude(&rhs_mag) == Ordering::Equal {
+            return BigInt { sign: result_sign, num: vec![1] };
         }
 
-        // Long division algorithm
+        // Long division algorithm (on magnitudes)
         let mut quotient = Vec::new();
         let mut remainder = BigInt::from(0_u64);
 
         for &digit in &self.num {
             // Shift remainder left and add next digit
             if remainder == BigInt::from(0_u64) {
-                // If remainder is zero, replace it with the new digit
                 remainder = if digit == 0 {
                     BigInt::from(0_u64)
                 } else {
                     BigInt { sign: Sign::Plus, num: vec![digit] }
                 };
             } else {
-                // Otherwise append the digit
                 remainder.num.push(digit);
             }
 
-            // Find how many times rhs fits into current remainder
+            // Find how many times rhs_mag fits into current remainder
             let mut count = 0_u8;
-            while remainder >= rhs {
-                remainder = remainder.checked_sub(&rhs).unwrap();
+            while remainder.compare_magnitude(&rhs_mag) != Ordering::Less {
+                remainder = BigInt {
+                    sign: Sign::Plus,
+                    num: remainder.sub_magnitude(&rhs_mag)
+                };
                 count += 1;
             }
 
@@ -829,8 +879,7 @@ impl Div for BigInt {
             return BigInt::from(0_u64);
         }
 
-        // TODO: Implement proper sign handling for division
-        BigInt { sign: Sign::Plus, num: quotient }
+        BigInt { sign: result_sign, num: quotient }
     }
 }
 
@@ -852,6 +901,10 @@ impl Rem for BigInt {
     /// let b = BigInt::from(7_u64);
     /// let c = a % b;
     /// assert_eq!(c, BigInt::from(2_u64));
+    ///
+    /// let d = BigInt::from(-100_i64);
+    /// let e = BigInt::from(7_i64);
+    /// assert_eq!(d % e, BigInt::from(-2_i64));
     /// ```
     fn rem(self, rhs: Self) -> Self::Output {
         // Check for division by zero
@@ -864,40 +917,49 @@ impl Rem for BigInt {
             return BigInt::from(0_u64);
         }
 
-        // If divisor is larger, remainder is self
-        if self < rhs {
+        // Remainder takes the sign of the dividend (self)
+        let result_sign = self.sign;
+
+        // Work with magnitudes only
+        let self_mag = BigInt { sign: Sign::Plus, num: self.num.clone() };
+        let rhs_mag = BigInt { sign: Sign::Plus, num: rhs.num.clone() };
+
+        // If divisor magnitude is larger, remainder is self
+        if self_mag.compare_magnitude(&rhs_mag) == Ordering::Less {
             return self;
         }
 
-        // If equal, remainder is 0
-        if self == rhs {
+        // If magnitudes equal, remainder is 0
+        if self_mag.compare_magnitude(&rhs_mag) == Ordering::Equal {
             return BigInt::from(0_u64);
         }
 
-        // Long division to find remainder
+        // Long division to find remainder (on magnitudes)
         let mut remainder = BigInt::from(0_u64);
 
         for &digit in &self.num {
             // Shift remainder left and add next digit
             if remainder == BigInt::from(0_u64) {
-                // If remainder is zero, replace it with the new digit
                 remainder = if digit == 0 {
                     BigInt::from(0_u64)
                 } else {
                     BigInt { sign: Sign::Plus, num: vec![digit] }
                 };
             } else {
-                // Otherwise append the digit
                 remainder.num.push(digit);
             }
 
-            // Subtract rhs as many times as possible
-            while remainder >= rhs {
-                remainder = remainder.checked_sub(&rhs).unwrap();
+            // Subtract rhs_mag as many times as possible
+            while remainder.compare_magnitude(&rhs_mag) != Ordering::Less {
+                remainder = BigInt {
+                    sign: Sign::Plus,
+                    num: remainder.sub_magnitude(&rhs_mag)
+                };
             }
         }
 
-        // TODO: Implement proper sign handling for remainder
+        // Apply sign of dividend to remainder
+        remainder.sign = result_sign;
         remainder
     }
 }
@@ -1510,7 +1572,7 @@ impl BigInt {
         }
     }
 
-    /// Returns the absolute value (no-op for unsigned BigInt).
+    /// Returns the absolute value.
     ///
     /// # Examples
     ///
@@ -1519,9 +1581,41 @@ impl BigInt {
     ///
     /// let num = BigInt::from(42_u64);
     /// assert_eq!(num.abs(), BigInt::from(42_u64));
+    ///
+    /// let neg = BigInt::from(-42_i64);
+    /// assert_eq!(neg.abs(), BigInt::from(42_u64));
     /// ```
     pub fn abs(self) -> Self {
-        self // BigInt is always non-negative
+        BigInt {
+            sign: Sign::Plus,
+            num: self.num,
+        }
+    }
+
+    /// Returns the sign of this number.
+    ///
+    /// Returns:
+    /// - `1` if the number is positive
+    /// - `0` if the number is zero
+    /// - `-1` if the number is negative
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// assert_eq!(BigInt::from(42_i64).signum(), BigInt::from(1_i64));
+    /// assert_eq!(BigInt::from(0_i64).signum(), BigInt::from(0_i64));
+    /// assert_eq!(BigInt::from(-42_i64).signum(), BigInt::from(-1_i64));
+    /// ```
+    pub fn signum(&self) -> BigInt {
+        if self.is_zero() {
+            BigInt::from(0_i64)
+        } else if self.sign == Sign::Plus {
+            BigInt::from(1_i64)
+        } else {
+            BigInt::from(-1_i64)
+        }
     }
 
     /// Computes the factorial of this number.
@@ -1793,21 +1887,36 @@ impl Ord for BigInt {
     /// Returns `Ordering::Greater` if `self` is greater than `other`,
     /// `Ordering::Less` if `self` is less than `other`, and
     /// `Ordering::Equal` if they are equal.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(-10_i64);
+    /// let b = BigInt::from(5_i64);
+    /// assert!(a < b);
+    ///
+    /// let c = BigInt::from(-20_i64);
+    /// assert!(a > c);  // -10 > -20
+    /// ```
     fn cmp(&self, other: &Self) -> Ordering {
-        // Compare lengths first
-        if self.num.len() != other.num.len() {
-            return self.num.len().cmp(&other.num.len());
+        // Different signs: negative < positive
+        match (self.sign, other.sign) {
+            (Sign::Minus, Sign::Plus) => return Ordering::Less,
+            (Sign::Plus, Sign::Minus) => return Ordering::Greater,
+            _ => {}
         }
 
-        // If lengths are equal, compare digit by digit from most significant
-        for (s, o) in self.num.iter().zip(other.num.iter()) {
-            match s.cmp(o) {
-                Ordering::Equal => continue,
-                other => return other,
-            }
-        }
+        // Same sign: compare magnitudes
+        let mag_cmp = self.compare_magnitude(other);
 
-        Ordering::Equal
+        // For positive numbers: larger magnitude = greater
+        // For negative numbers: larger magnitude = less (more negative)
+        match self.sign {
+            Sign::Plus => mag_cmp,
+            Sign::Minus => mag_cmp.reverse(),
+        }
     }
 }
 
