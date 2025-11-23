@@ -1,20 +1,71 @@
+//! Arbitrary-precision decimal number implementation.
+//!
+//! This module provides the [`Decimal`] type for representing and performing
+//! arithmetic operations on decimal numbers with configurable precision.
+
 use crate::bigint::BigInt;
 
+/// Default precision for decimal numbers (number of significant digits)
 const DEFAULT_PRECISION: usize = 28;
 
+/// An arbitrary-precision decimal number.
+///
+/// `Decimal` represents a decimal number with configurable precision,
+/// suitable for financial calculations and other applications requiring
+/// exact decimal arithmetic.
+///
+/// # Examples
+///
+/// ```
+/// use decimal_rs::decimal::Decimal;
+///
+/// let dec = Decimal::new(10);
+/// ```
 #[derive(Debug)]
 pub struct Decimal {
+    /// Sign of the decimal (false = positive, true = negative)
     sign: bool,
+    /// The underlying integer value
     num: BigInt,
+    /// The exponent (decimal point position)
     exponent: usize,
+    /// Precision (number of significant digits)
     pub prec: usize,
 }
 
 impl Decimal {
+    /// Creates a new `Decimal` with the specified precision.
+    ///
+    /// The decimal is initialized to zero with the given precision.
+    ///
+    /// # Arguments
+    ///
+    /// * `prec` - The number of significant digits to maintain
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::decimal::Decimal;
+    ///
+    /// let dec = Decimal::new(10);
+    /// ```
     pub fn new(prec: usize) -> Self {
         Self { sign: false, num: BigInt::new(), exponent: 0, prec}
     }
 
+    /// Prints debug information about the decimal.
+    ///
+    /// This is a temporary debugging method that prints the internal
+    /// representation of the decimal to stdout.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use decimal_rs::decimal::Decimal;
+    ///
+    /// let dec = Decimal::new(10);
+    /// dec.debug_display();
+    /// ```
     pub fn debug_display(&self) {
         println!("num: {}{:?}, prec: {}", &self.sign, &self.num, &self.prec);
     }
