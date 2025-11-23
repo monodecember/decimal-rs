@@ -6,7 +6,7 @@
 
 Una biblioteca Rust de alto rendimiento para aritmética decimal de precisión arbitraria. Construida con seguridad, ergonomía y rendimiento en mente.
 
-[English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | **Español** | [Français](README.fr.md)
+[English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | **Español** | [Français](README.fr.md)
 
 ## ✨ Características
 

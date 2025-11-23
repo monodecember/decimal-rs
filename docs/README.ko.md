@@ -6,7 +6,7 @@
 
 안전성, 편의성, 성능을 고려하여 설계된 고성능 Rust 임의 정밀도 십진수 연산 라이브러리입니다.
 
-[English](README.md) | **한국어** | [日本語](README.ja.md) | [中文](README.zh.md)
+[English](../README.md) | **한국어** | [日本語](README.ja.md) | [中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md)
 
 ## ✨ 주요 기능
 

@@ -6,7 +6,7 @@
 
 安全性、使いやすさ、パフォーマンスを考慮して設計された高性能な任意精度十進演算Rustライブラリです。
 
-[English](README.md) | [한국어](README.ko.md) | **日本語** | [中文](README.zh.md)
+[English](../README.md) | [한국어](README.ko.md) | **日本語** | [中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md)
 
 ## ✨ 主な機能
 

@@ -6,7 +6,7 @@
 
 A high-performance Rust library for arbitrary-precision decimal arithmetic. Built with safety, ergonomics, and performance in mind.
 
-**English** | [한국어](README.ko.md) | [日本語](README.ja.md) | [中文](README.zh.md) | [Español](README.es.md) | [Français](README.fr.md)
+**English** | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [中文](docs/README.zh.md) | [Español](docs/README.es.md) | [Français](docs/README.fr.md)
 
 ## ✨ Features
 

@@ -6,7 +6,7 @@
 
 一个高性能的Rust任意精度十进制运算库。专注于安全性、易用性和性能。
 
-[English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | **中文**
+[English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | **中文** | [Español](README.es.md) | [Français](README.fr.md)
 
 ## ✨ 主要特性
 
