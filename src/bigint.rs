@@ -897,6 +897,133 @@ impl BigInt {
         }
     }
 
+    /// Checked addition. Returns `None` on overflow (never for BigInt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(42_u64);
+    /// assert_eq!(a.checked_add(&b), Some(BigInt::from(142_u64)));
+    /// ```
+    pub fn checked_add(&self, rhs: &Self) -> Option<Self> {
+        // BigInt never overflows
+        Some(self.clone() + rhs.clone())
+    }
+
+    /// Checked multiplication. Returns `None` on overflow (never for BigInt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(10_u64);
+    /// let b = BigInt::from(5_u64);
+    /// assert_eq!(a.checked_mul(&b), Some(BigInt::from(50_u64)));
+    /// ```
+    pub fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+        // BigInt never overflows
+        Some(self.clone() * rhs.clone())
+    }
+
+    /// Checked division. Returns `None` if dividing by zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(5_u64);
+    /// assert_eq!(a.checked_div(&b), Some(BigInt::from(20_u64)));
+    ///
+    /// let zero = BigInt::from(0_u64);
+    /// assert_eq!(a.checked_div(&zero), None);
+    /// ```
+    pub fn checked_div(&self, rhs: &Self) -> Option<Self> {
+        if rhs.is_zero() {
+            None
+        } else {
+            Some(self.clone() / rhs.clone())
+        }
+    }
+
+    /// Checked remainder. Returns `None` if dividing by zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(7_u64);
+    /// assert_eq!(a.checked_rem(&b), Some(BigInt::from(2_u64)));
+    ///
+    /// let zero = BigInt::from(0_u64);
+    /// assert_eq!(a.checked_rem(&zero), None);
+    /// ```
+    pub fn checked_rem(&self, rhs: &Self) -> Option<Self> {
+        if rhs.is_zero() {
+            None
+        } else {
+            Some(self.clone() % rhs.clone())
+        }
+    }
+
+    /// Saturating addition (same as normal add for BigInt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(42_u64);
+    /// assert_eq!(a.saturating_add(&b), BigInt::from(142_u64));
+    /// ```
+    pub fn saturating_add(&self, rhs: &Self) -> Self {
+        // BigInt never saturates
+        self.clone() + rhs.clone()
+    }
+
+    /// Saturating subtraction. Returns zero if result would be negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::{BigInt, Zero};
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(42_u64);
+    /// assert_eq!(a.saturating_sub(&b), BigInt::from(58_u64));
+    ///
+    /// let c = BigInt::from(10_u64);
+    /// let d = BigInt::from(20_u64);
+    /// assert!(c.saturating_sub(&d).is_zero());
+    /// ```
+    pub fn saturating_sub(&self, rhs: &Self) -> Self {
+        self.checked_sub(rhs).unwrap_or_else(BigInt::zero)
+    }
+
+    /// Saturating multiplication (same as normal mul for BigInt).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(10_u64);
+    /// let b = BigInt::from(5_u64);
+    /// assert_eq!(a.saturating_mul(&b), BigInt::from(50_u64));
+    /// ```
+    pub fn saturating_mul(&self, rhs: &Self) -> Self {
+        // BigInt never saturates
+        self.clone() * rhs.clone()
+    }
+
     /// Returns `true` if this number is even.
     ///
     /// # Examples
@@ -1431,6 +1558,70 @@ impl fmt::Display for BigInt {
     }
 }
 
+impl fmt::Binary for BigInt {
+    /// Formats the `BigInt` as a binary string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(255_u64);
+    /// assert_eq!(format!("{:b}", num), "11111111");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string_radix(2))
+    }
+}
+
+impl fmt::Octal for BigInt {
+    /// Formats the `BigInt` as an octal string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(64_u64);
+    /// assert_eq!(format!("{:o}", num), "100");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string_radix(8))
+    }
+}
+
+impl fmt::LowerHex for BigInt {
+    /// Formats the `BigInt` as a lowercase hexadecimal string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(255_u64);
+    /// assert_eq!(format!("{:x}", num), "ff");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string_radix(16))
+    }
+}
+
+impl fmt::UpperHex for BigInt {
+    /// Formats the `BigInt` as an uppercase hexadecimal string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(255_u64);
+    /// assert_eq!(format!("{:X}", num), "FF");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string_radix(16).to_uppercase())
+    }
+}
+
 impl PartialOrd for BigInt {
     /// Compares two `BigInt` values.
     ///
@@ -1469,6 +1660,128 @@ impl Ord for BigInt {
         }
 
         Ordering::Equal
+    }
+}
+
+// Reference operations for better ergonomics
+impl<'a, 'b> Add<&'b BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn add(self, rhs: &'b BigInt) -> BigInt {
+        self.clone() + rhs.clone()
+    }
+}
+
+impl<'a> Add<&'a BigInt> for BigInt {
+    type Output = BigInt;
+
+    fn add(self, rhs: &'a BigInt) -> BigInt {
+        self + rhs.clone()
+    }
+}
+
+impl<'a> Add<BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn add(self, rhs: BigInt) -> BigInt {
+        self.clone() + rhs
+    }
+}
+
+impl<'a, 'b> Sub<&'b BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn sub(self, rhs: &'b BigInt) -> BigInt {
+        self.clone() - rhs.clone()
+    }
+}
+
+impl<'a> Sub<&'a BigInt> for BigInt {
+    type Output = BigInt;
+
+    fn sub(self, rhs: &'a BigInt) -> BigInt {
+        self - rhs.clone()
+    }
+}
+
+impl<'a> Sub<BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn sub(self, rhs: BigInt) -> BigInt {
+        self.clone() - rhs
+    }
+}
+
+impl<'a, 'b> Mul<&'b BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn mul(self, rhs: &'b BigInt) -> BigInt {
+        self.clone() * rhs.clone()
+    }
+}
+
+impl<'a> Mul<&'a BigInt> for BigInt {
+    type Output = BigInt;
+
+    fn mul(self, rhs: &'a BigInt) -> BigInt {
+        self * rhs.clone()
+    }
+}
+
+impl<'a> Mul<BigInt> for &'a BigInt {
+    type Output = BigInt;
+
+    fn mul(self, rhs: BigInt) -> BigInt {
+        self.clone() * rhs
+    }
+}
+
+// PartialEq with primitive types
+impl PartialEq<u64> for BigInt {
+    fn eq(&self, other: &u64) -> bool {
+        *self == BigInt::from(*other)
+    }
+}
+
+impl PartialEq<BigInt> for u64 {
+    fn eq(&self, other: &BigInt) -> bool {
+        BigInt::from(*self) == *other
+    }
+}
+
+impl PartialEq<u32> for BigInt {
+    fn eq(&self, other: &u32) -> bool {
+        *self == BigInt::from(*other)
+    }
+}
+
+impl PartialEq<BigInt> for u32 {
+    fn eq(&self, other: &BigInt) -> bool {
+        BigInt::from(*self) == *other
+    }
+}
+
+// Index trait for digit access
+impl std::ops::Index<usize> for BigInt {
+    type Output = u8;
+
+    /// Access individual digits by index (0 = most significant).
+    ///
+    /// # Panics
+    ///
+    /// Panics if index is out of bounds.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u64);
+    /// assert_eq!(num[0], 1);
+    /// assert_eq!(num[4], 5);
+    /// ```
+    fn index(&self, index: usize) -> &u8 {
+        &self.num[index]
     }
 }
 
