@@ -6,6 +6,10 @@
 //! - [`BigInt`](bigint::BigInt): Arbitrary-precision integers
 //! - [`Decimal`](decimal::Decimal): Arbitrary-precision decimal numbers
 //!
+//! It also provides numeric traits:
+//! - [`Zero`](bigint::Zero): Types with an additive identity
+//! - [`One`](bigint::One): Types with a multiplicative identity
+//!
 //! ## Examples
 //!
 //! ```
@@ -23,6 +27,9 @@
 
 pub mod bigint;
 pub mod decimal;
+
+// Re-export commonly used traits
+pub use bigint::{Zero, One};
 
 use std::fmt;
 

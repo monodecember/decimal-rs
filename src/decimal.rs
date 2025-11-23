@@ -21,7 +21,7 @@ const DEFAULT_PRECISION: usize = 28;
 ///
 /// let dec = Decimal::new(10);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Decimal {
     /// Sign of the decimal (false = positive, true = negative)
     sign: bool,

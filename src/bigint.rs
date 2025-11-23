@@ -6,9 +6,27 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign};
+use std::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, Shl, Shr};
 use std::str::FromStr;
 use crate::DecimalError;
+
+/// Trait for types that have a zero value.
+pub trait Zero {
+    /// Returns the zero value for this type.
+    fn zero() -> Self;
+
+    /// Returns `true` if this value is zero.
+    fn is_zero(&self) -> bool;
+}
+
+/// Trait for types that have a multiplicative identity (one).
+pub trait One {
+    /// Returns the multiplicative identity (one) for this type.
+    fn one() -> Self;
+
+    /// Returns `true` if this value is one.
+    fn is_one(&self) -> bool;
+}
 
 /// An arbitrary-precision integer.
 ///
@@ -446,12 +464,15 @@ impl Sub for BigInt {
         // Reverse once at the end to get most-to-least significant order
         result.reverse();
 
-        // Remove leading zeros
-        while result.len() > 1 && result[0] == 0 {
-            result.remove(0);
-        }
+        // Remove leading zeros - O(n) instead of O(n²)
+        let leading_zeros = result.iter().take_while(|&&d| d == 0).count();
+        let start = if leading_zeros >= result.len() - 1 {
+            result.len() - 1
+        } else {
+            leading_zeros
+        };
 
-        BigInt { num: result }
+        BigInt { num: result[start..].to_vec() }
     }
 }
 
@@ -528,12 +549,15 @@ impl Mul for BigInt {
         let mut final_result: Vec<u8> = result.iter().map(|&d| d as u8).collect();
         final_result.reverse();
 
-        // Remove leading zeros
-        while final_result.len() > 1 && final_result[0] == 0 {
-            final_result.remove(0);
-        }
+        // Remove leading zeros - O(n) instead of O(n²)
+        let leading_zeros = final_result.iter().take_while(|&&d| d == 0).count();
+        let start = if leading_zeros >= final_result.len() - 1 {
+            final_result.len() - 1
+        } else {
+            leading_zeros
+        };
 
-        BigInt { num: final_result }
+        BigInt { num: final_result[start..].to_vec() }
     }
 }
 
@@ -551,6 +575,65 @@ impl MulAssign for BigInt {
     /// ```
     fn mul_assign(&mut self, rhs: Self) {
         *self = self.clone() * rhs;
+    }
+}
+
+impl Shl<usize> for BigInt {
+    type Output = BigInt;
+
+    /// Left shift (multiply by 10^rhs).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(123_u64);
+    /// let shifted = num << 2;  // Multiply by 100
+    /// assert_eq!(shifted, BigInt::from(12300_u64));
+    /// ```
+    fn shl(self, rhs: usize) -> Self::Output {
+        if rhs == 0 || self.is_zero() {
+            return self;
+        }
+
+        // Append 'rhs' zeros to the end
+        let mut result = self.num;
+        result.reserve(rhs);
+        for _ in 0..rhs {
+            result.push(0);
+        }
+
+        BigInt { num: result }
+    }
+}
+
+impl Shr<usize> for BigInt {
+    type Output = BigInt;
+
+    /// Right shift (divide by 10^rhs).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12300_u64);
+    /// let shifted = num >> 2;  // Divide by 100
+    /// assert_eq!(shifted, BigInt::from(123_u64));
+    /// ```
+    fn shr(self, rhs: usize) -> Self::Output {
+        if rhs == 0 {
+            return self;
+        }
+
+        if rhs >= self.num.len() {
+            return BigInt::zero();
+        }
+
+        // Remove 'rhs' digits from the end
+        let new_len = self.num.len() - rhs;
+        BigInt { num: self.num[..new_len].to_vec() }
     }
 }
 
@@ -739,6 +822,119 @@ impl BigInt {
             Some(self.clone() - rhs.clone())
         }
     }
+
+    /// Returns `true` if this number is even.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let even = BigInt::from(42_u64);
+    /// let odd = BigInt::from(43_u64);
+    /// assert!(even.is_even());
+    /// assert!(!odd.is_even());
+    /// ```
+    pub fn is_even(&self) -> bool {
+        if self.num.is_empty() {
+            return true; // Zero is even
+        }
+        self.num[self.num.len() - 1] % 2 == 0
+    }
+
+    /// Returns `true` if this number is odd.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let even = BigInt::from(42_u64);
+    /// let odd = BigInt::from(43_u64);
+    /// assert!(!even.is_odd());
+    /// assert!(odd.is_odd());
+    /// ```
+    pub fn is_odd(&self) -> bool {
+        !self.is_even()
+    }
+
+    /// Raises `self` to the power of `exp`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let base = BigInt::from(2_u64);
+    /// let result = base.pow(10);
+    /// assert_eq!(result, BigInt::from(1024_u64));
+    /// ```
+    pub fn pow(&self, mut exp: u32) -> Self {
+        if exp == 0 {
+            return BigInt::from(1_u64);
+        }
+        if exp == 1 {
+            return self.clone();
+        }
+
+        // Exponentiation by squaring
+        let mut base = self.clone();
+        let mut result = BigInt::from(1_u64);
+
+        while exp > 0 {
+            if exp % 2 == 1 {
+                result = result * base.clone();
+            }
+            base = base.clone() * base;
+            exp /= 2;
+        }
+
+        result
+    }
+
+    /// Computes the greatest common divisor (GCD) using Euclid's algorithm.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(48_u64);
+    /// let b = BigInt::from(18_u64);
+    /// let gcd = a.gcd(&b);
+    /// assert_eq!(gcd, BigInt::from(6_u64));
+    /// ```
+    pub fn gcd(&self, other: &Self) -> Self {
+        let mut a = self.clone();
+        let mut b = other.clone();
+
+        while !b.is_zero() {
+            let remainder = a % b.clone();
+            a = b;
+            b = remainder;
+        }
+
+        a
+    }
+
+    /// Computes the least common multiple (LCM).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(12_u64);
+    /// let b = BigInt::from(18_u64);
+    /// let lcm = a.lcm(&b);
+    /// assert_eq!(lcm, BigInt::from(36_u64));
+    /// ```
+    pub fn lcm(&self, other: &Self) -> Self {
+        if self.is_zero() || other.is_zero() {
+            return BigInt::zero();
+        }
+        (self.clone() * other.clone()) / self.gcd(other)
+    }
 }
 
 impl Default for BigInt {
@@ -754,6 +950,72 @@ impl Default for BigInt {
     /// ```
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Zero for BigInt {
+    /// Returns the zero value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::{BigInt, Zero};
+    ///
+    /// let zero = BigInt::zero();
+    /// assert!(zero.is_zero());
+    /// assert_eq!(format!("{}", zero), "0");
+    /// ```
+    fn zero() -> Self {
+        BigInt::new()
+    }
+
+    /// Returns `true` if this value is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::{BigInt, Zero};
+    ///
+    /// let zero = BigInt::from(0_u64);
+    /// let non_zero = BigInt::from(42_u64);
+    /// assert!(zero.is_zero());
+    /// assert!(!non_zero.is_zero());
+    /// ```
+    fn is_zero(&self) -> bool {
+        self.num.is_empty() || (self.num.len() == 1 && self.num[0] == 0)
+    }
+}
+
+impl One for BigInt {
+    /// Returns the multiplicative identity (one).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::{BigInt, One};
+    ///
+    /// let one = BigInt::one();
+    /// assert!(one.is_one());
+    /// assert_eq!(one, BigInt::from(1_u64));
+    /// ```
+    fn one() -> Self {
+        BigInt::from(1_u64)
+    }
+
+    /// Returns `true` if this value is one.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::{BigInt, One};
+    ///
+    /// let one = BigInt::from(1_u64);
+    /// let not_one = BigInt::from(42_u64);
+    /// assert!(one.is_one());
+    /// assert!(!not_one.is_one());
+    /// ```
+    fn is_one(&self) -> bool {
+        self.num.len() == 1 && self.num[0] == 1
     }
 }
 
