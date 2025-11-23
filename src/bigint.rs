@@ -4,6 +4,7 @@
 //! arithmetic operations on integers of arbitrary size.
 
 use std::cmp::Ordering;
+use std::convert::TryFrom;
 use std::fmt;
 use std::ops::{Add, Sub, Mul};
 use std::str::FromStr;
@@ -24,7 +25,7 @@ use crate::DecimalError;
 /// let c = a + b;
 /// assert_eq!(c, BigInt::from("80235"));
 /// ```
-#[derive(Debug, PartialEq, Clone, Eq)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct BigInt {
     /// Vector of digits (0-9) representing the number
     num: Vec<u8>,
@@ -88,6 +89,230 @@ impl From<&str> for BigInt {
     /// ```
     fn from(s: &str) -> Self {
         s.parse().expect("Failed to parse BigInt from string")
+    }
+}
+
+impl From<u64> for BigInt {
+    /// Converts a `u64` to a `BigInt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u64);
+    /// assert_eq!(num, BigInt::from("12345"));
+    /// ```
+    fn from(mut n: u64) -> Self {
+        if n == 0 {
+            return Self { num: vec![0] };
+        }
+
+        let mut digits = Vec::new();
+        while n > 0 {
+            digits.push((n % 10) as u8);
+            n /= 10;
+        }
+        digits.reverse();
+
+        Self { num: digits }
+    }
+}
+
+impl From<u32> for BigInt {
+    /// Converts a `u32` to a `BigInt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_u32);
+    /// assert_eq!(num, BigInt::from("12345"));
+    /// ```
+    fn from(n: u32) -> Self {
+        Self::from(n as u64)
+    }
+}
+
+impl From<usize> for BigInt {
+    /// Converts a `usize` to a `BigInt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::from(12345_usize);
+    /// assert_eq!(num, BigInt::from("12345"));
+    /// ```
+    fn from(n: usize) -> Self {
+        Self::from(n as u64)
+    }
+}
+
+impl TryFrom<i64> for BigInt {
+    type Error = DecimalError;
+
+    /// Tries to convert an `i64` to a `BigInt`.
+    ///
+    /// Returns an error if the number is negative, as `BigInt` only supports
+    /// non-negative numbers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecimalError::InvalidFormat`] if the number is negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let num = BigInt::try_from(12345_i64).unwrap();
+    /// assert_eq!(num, BigInt::from("12345"));
+    ///
+    /// let result = BigInt::try_from(-123_i64);
+    /// assert!(result.is_err());
+    /// ```
+    fn try_from(n: i64) -> Result<Self, Self::Error> {
+        if n < 0 {
+            return Err(DecimalError::InvalidFormat(
+                "BigInt does not support negative numbers".to_string(),
+            ));
+        }
+        Ok(Self::from(n as u64))
+    }
+}
+
+impl TryFrom<i32> for BigInt {
+    type Error = DecimalError;
+
+    /// Tries to convert an `i32` to a `BigInt`.
+    ///
+    /// Returns an error if the number is negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let num = BigInt::try_from(12345_i32).unwrap();
+    /// assert_eq!(num, BigInt::from(12345_u64));
+    /// ```
+    fn try_from(n: i32) -> Result<Self, Self::Error> {
+        Self::try_from(n as i64)
+    }
+}
+
+impl TryFrom<isize> for BigInt {
+    type Error = DecimalError;
+
+    /// Tries to convert an `isize` to a `BigInt`.
+    ///
+    /// Returns an error if the number is negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let num = BigInt::try_from(12345_isize).unwrap();
+    /// assert_eq!(num, BigInt::from(12345_u64));
+    /// ```
+    fn try_from(n: isize) -> Result<Self, Self::Error> {
+        Self::try_from(n as i64)
+    }
+}
+
+impl TryFrom<BigInt> for u64 {
+    type Error = DecimalError;
+
+    /// Tries to convert a `BigInt` to a `u64`.
+    ///
+    /// Returns an error if the `BigInt` is too large to fit in a `u64`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecimalError::InvalidFormat`] if the value exceeds `u64::MAX`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let big = BigInt::from(12345_u64);
+    /// let n: u64 = big.try_into().unwrap();
+    /// assert_eq!(n, 12345);
+    ///
+    /// let too_big = BigInt::from("99999999999999999999999999");
+    /// let result = u64::try_from(too_big);
+    /// assert!(result.is_err());
+    /// ```
+    fn try_from(value: BigInt) -> Result<Self, Self::Error> {
+        // Handle zero case (empty or single 0)
+        if value.num.is_empty() || (value.num.len() == 1 && value.num[0] == 0) {
+            return Ok(0);
+        }
+
+        // Check if it fits in u64 by trying to parse
+        let s = format!("{}", value);
+        s.parse::<u64>().map_err(|_| {
+            DecimalError::InvalidFormat(format!(
+                "BigInt value {} exceeds u64::MAX ({})",
+                s,
+                u64::MAX
+            ))
+        })
+    }
+}
+
+impl TryFrom<BigInt> for u32 {
+    type Error = DecimalError;
+
+    /// Tries to convert a `BigInt` to a `u32`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let big = BigInt::from(12345_u32);
+    /// let n: u32 = big.try_into().unwrap();
+    /// assert_eq!(n, 12345);
+    /// ```
+    fn try_from(value: BigInt) -> Result<Self, Self::Error> {
+        let n = u64::try_from(value)?;
+        u32::try_from(n).map_err(|_| {
+            DecimalError::InvalidFormat(format!("Value {} exceeds u32::MAX", n))
+        })
+    }
+}
+
+impl TryFrom<BigInt> for usize {
+    type Error = DecimalError;
+
+    /// Tries to convert a `BigInt` to a `usize`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    /// use std::convert::TryFrom;
+    ///
+    /// let big = BigInt::from(12345_usize);
+    /// let n: usize = big.try_into().unwrap();
+    /// assert_eq!(n, 12345);
+    /// ```
+    fn try_from(value: BigInt) -> Result<Self, Self::Error> {
+        let n = u64::try_from(value)?;
+        usize::try_from(n).map_err(|_| {
+            DecimalError::InvalidFormat(format!("Value {} exceeds usize::MAX", n))
+        })
     }
 }
 
@@ -281,6 +506,22 @@ impl BigInt {
     /// ```
     pub fn new() -> Self {
         Self { num: Vec::new() }
+    }
+}
+
+impl Default for BigInt {
+    /// Creates a default `BigInt` (zero).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let num = BigInt::default();
+    /// assert_eq!(num, BigInt::new());
+    /// ```
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -636,5 +877,124 @@ mod tests {
         let a = BigInt::from("12345");
         let b = a.clone();
         assert_eq!(a, b);
+    }
+
+    // Default test
+    #[test]
+    fn test_default() {
+        let a = BigInt::default();
+        let b = BigInt::new();
+        assert_eq!(a, b);
+    }
+
+    // Hash test
+    #[test]
+    fn test_hash() {
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        let key = BigInt::from(12345_u64);
+        map.insert(key.clone(), "value");
+        assert_eq!(map.get(&key), Some(&"value"));
+    }
+
+    // From<u64> tests
+    #[test]
+    fn test_from_u64() {
+        assert_eq!(BigInt::from(0_u64), BigInt::from("0"));
+        assert_eq!(BigInt::from(123_u64), BigInt::from("123"));
+        assert_eq!(BigInt::from(u64::MAX), BigInt::from("18446744073709551615"));
+    }
+
+    #[test]
+    fn test_from_u32() {
+        assert_eq!(BigInt::from(12345_u32), BigInt::from("12345"));
+    }
+
+    #[test]
+    fn test_from_usize() {
+        assert_eq!(BigInt::from(12345_usize), BigInt::from("12345"));
+    }
+
+    // TryFrom<i64> tests
+    #[test]
+    fn test_try_from_i64_positive() {
+        use std::convert::TryFrom;
+        let result = BigInt::try_from(12345_i64);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), BigInt::from(12345_u64));
+    }
+
+    #[test]
+    fn test_try_from_i64_zero() {
+        use std::convert::TryFrom;
+        let result = BigInt::try_from(0_i64);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), BigInt::from(0_u64));
+    }
+
+    #[test]
+    fn test_try_from_i64_negative() {
+        use std::convert::TryFrom;
+        let result = BigInt::try_from(-123_i64);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_try_from_i32() {
+        use std::convert::TryFrom;
+        assert_eq!(BigInt::try_from(12345_i32).unwrap(), BigInt::from(12345_u64));
+        assert!(BigInt::try_from(-1_i32).is_err());
+    }
+
+    // TryFrom<BigInt> for u64 tests
+    #[test]
+    fn test_try_into_u64() {
+        use std::convert::TryInto;
+        let big = BigInt::from(12345_u64);
+        let n: Result<u64, _> = big.try_into();
+        assert!(n.is_ok());
+        assert_eq!(n.unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_try_into_u64_zero() {
+        use std::convert::TryInto;
+        let big = BigInt::new();
+        let n: Result<u64, _> = big.try_into();
+        assert_eq!(n.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_try_into_u64_max() {
+        use std::convert::TryInto;
+        let big = BigInt::from(u64::MAX);
+        let n: Result<u64, _> = big.try_into();
+        assert_eq!(n.unwrap(), u64::MAX);
+    }
+
+    #[test]
+    fn test_try_into_u64_overflow() {
+        use std::convert::TryInto;
+        let big = BigInt::from("99999999999999999999999999");
+        let n: Result<u64, _> = big.try_into();
+        assert!(n.is_err());
+    }
+
+    #[test]
+    fn test_try_into_u32() {
+        use std::convert::TryInto;
+        let big = BigInt::from(12345_u32);
+        let n: Result<u32, _> = big.try_into();
+        assert_eq!(n.unwrap(), 12345);
+    }
+
+    // Round-trip conversion test
+    #[test]
+    fn test_roundtrip_u64() {
+        use std::convert::TryInto;
+        let original = 9876543210_u64;
+        let big = BigInt::from(original);
+        let converted: u64 = big.try_into().unwrap();
+        assert_eq!(original, converted);
     }
 }
