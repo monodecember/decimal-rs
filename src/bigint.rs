@@ -28,10 +28,19 @@ pub trait One {
     fn is_one(&self) -> bool;
 }
 
+/// Sign of a `BigInt`.
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum Sign {
+    /// Positive or zero
+    Plus,
+    /// Negative
+    Minus,
+}
+
 /// An arbitrary-precision integer.
 ///
-/// `BigInt` stores integers as a vector of digits (0-9), allowing it to
-/// represent numbers larger than the native integer types.
+/// `BigInt` stores integers as a vector of digits (0-9) with a sign,
+/// allowing it to represent positive and negative numbers of arbitrary size.
 ///
 /// # Examples
 ///
@@ -42,10 +51,17 @@ pub trait One {
 /// let b = BigInt::from("67890");
 /// let c = a + b;
 /// assert_eq!(c, BigInt::from("80235"));
+///
+/// let d = BigInt::from(-42_i64);
+/// let e = BigInt::from(10_i64);
+/// let f = d + e;
+/// assert_eq!(f, BigInt::from(-32_i64));
 /// ```
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct BigInt {
-    /// Vector of digits (0-9) representing the number
+    /// Sign of the number
+    sign: Sign,
+    /// Vector of digits (0-9) representing the absolute value
     num: Vec<u8>,
 }
 
@@ -69,10 +85,25 @@ impl FromStr for BigInt {
     /// let num = BigInt::from_str("12345").unwrap();
     /// assert_eq!(num, BigInt::from("12345"));
     ///
+    /// let neg = BigInt::from_str("-42").unwrap();
+    /// assert_eq!(neg, BigInt::from(-42_i64));
+    ///
     /// let result = BigInt::from_str("abc");
     /// assert!(result.is_err());
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err(DecimalError::EmptyInput);
+        }
+
+        let (sign, s) = if s.starts_with('-') {
+            (Sign::Minus, &s[1..])
+        } else if s.starts_with('+') {
+            (Sign::Plus, &s[1..])
+        } else {
+            (Sign::Plus, s)
+        };
+
         if s.is_empty() {
             return Err(DecimalError::EmptyInput);
         }
@@ -86,7 +117,7 @@ impl FromStr for BigInt {
             }
         }
 
-        Ok(Self { num })
+        Ok(Self { sign, num })
     }
 }
 
@@ -123,7 +154,7 @@ impl From<u64> for BigInt {
     /// ```
     fn from(mut n: u64) -> Self {
         if n == 0 {
-            return Self { num: vec![0] };
+            return Self { sign: Sign::Plus, num: vec![0] };
         }
 
         let mut digits = Vec::new();
@@ -133,7 +164,7 @@ impl From<u64> for BigInt {
         }
         digits.reverse();
 
-        Self { num: digits }
+        Self { sign: Sign::Plus, num: digits }
     }
 }
 
@@ -201,121 +232,113 @@ impl From<usize> for BigInt {
     }
 }
 
-impl TryFrom<i64> for BigInt {
-    type Error = DecimalError;
-
-    /// Tries to convert an `i64` to a `BigInt`.
-    ///
-    /// Returns an error if the number is negative, as `BigInt` only supports
-    /// non-negative numbers.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`DecimalError::InvalidFormat`] if the number is negative.
+impl From<i64> for BigInt {
+    /// Converts an `i64` to a `BigInt`.
     ///
     /// # Examples
     ///
     /// ```
     /// use decimal_rs::bigint::BigInt;
-    /// use std::convert::TryFrom;
     ///
-    /// let num = BigInt::try_from(12345_i64).unwrap();
+    /// let num = BigInt::from(12345_i64);
     /// assert_eq!(num, BigInt::from("12345"));
     ///
-    /// let result = BigInt::try_from(-123_i64);
-    /// assert!(result.is_err());
+    /// let neg = BigInt::from(-123_i64);
+    /// assert_eq!(neg, BigInt::from("-123"));
     /// ```
-    fn try_from(n: i64) -> Result<Self, Self::Error> {
-        if n < 0 {
-            return Err(DecimalError::InvalidFormat(
-                "BigInt does not support negative numbers".to_string(),
-            ));
+    fn from(n: i64) -> Self {
+        if n == 0 {
+            return Self { sign: Sign::Plus, num: vec![0] };
         }
-        Ok(Self::from(n as u64))
+
+        let sign = if n < 0 { Sign::Minus } else { Sign::Plus };
+        let abs_n = n.unsigned_abs();
+
+        let mut digits = Vec::new();
+        let mut remaining = abs_n;
+        while remaining > 0 {
+            digits.push((remaining % 10) as u8);
+            remaining /= 10;
+        }
+        digits.reverse();
+
+        Self { sign, num: digits }
     }
 }
 
-impl TryFrom<i8> for BigInt {
-    type Error = DecimalError;
-
-    /// Tries to convert an `i8` to a `BigInt`.
-    ///
-    /// Returns an error if the number is negative.
+impl From<i8> for BigInt {
+    /// Converts an `i8` to a `BigInt`.
     ///
     /// # Examples
     ///
     /// ```
     /// use decimal_rs::bigint::BigInt;
-    /// use std::convert::TryFrom;
     ///
-    /// let num = BigInt::try_from(127_i8).unwrap();
+    /// let num = BigInt::from(127_i8);
     /// assert_eq!(num, BigInt::from(127_u64));
+    ///
+    /// let neg = BigInt::from(-42_i8);
+    /// assert_eq!(neg, BigInt::from("-42"));
     /// ```
-    fn try_from(n: i8) -> Result<Self, Self::Error> {
-        Self::try_from(n as i64)
+    fn from(n: i8) -> Self {
+        Self::from(n as i64)
     }
 }
 
-impl TryFrom<i16> for BigInt {
-    type Error = DecimalError;
-
-    /// Tries to convert an `i16` to a `BigInt`.
-    ///
-    /// Returns an error if the number is negative.
+impl From<i16> for BigInt {
+    /// Converts an `i16` to a `BigInt`.
     ///
     /// # Examples
     ///
     /// ```
     /// use decimal_rs::bigint::BigInt;
-    /// use std::convert::TryFrom;
     ///
-    /// let num = BigInt::try_from(32767_i16).unwrap();
+    /// let num = BigInt::from(32767_i16);
     /// assert_eq!(num, BigInt::from(32767_u64));
+    ///
+    /// let neg = BigInt::from(-1000_i16);
+    /// assert_eq!(neg, BigInt::from("-1000"));
     /// ```
-    fn try_from(n: i16) -> Result<Self, Self::Error> {
-        Self::try_from(n as i64)
+    fn from(n: i16) -> Self {
+        Self::from(n as i64)
     }
 }
 
-impl TryFrom<i32> for BigInt {
-    type Error = DecimalError;
-
-    /// Tries to convert an `i32` to a `BigInt`.
-    ///
-    /// Returns an error if the number is negative.
+impl From<i32> for BigInt {
+    /// Converts an `i32` to a `BigInt`.
     ///
     /// # Examples
     ///
     /// ```
     /// use decimal_rs::bigint::BigInt;
-    /// use std::convert::TryFrom;
     ///
-    /// let num = BigInt::try_from(12345_i32).unwrap();
+    /// let num = BigInt::from(12345_i32);
     /// assert_eq!(num, BigInt::from(12345_u64));
+    ///
+    /// let neg = BigInt::from(-98765_i32);
+    /// assert_eq!(neg, BigInt::from("-98765"));
     /// ```
-    fn try_from(n: i32) -> Result<Self, Self::Error> {
-        Self::try_from(n as i64)
+    fn from(n: i32) -> Self {
+        Self::from(n as i64)
     }
 }
 
-impl TryFrom<isize> for BigInt {
-    type Error = DecimalError;
-
-    /// Tries to convert an `isize` to a `BigInt`.
-    ///
-    /// Returns an error if the number is negative.
+impl From<isize> for BigInt {
+    /// Converts an `isize` to a `BigInt`.
     ///
     /// # Examples
     ///
     /// ```
     /// use decimal_rs::bigint::BigInt;
-    /// use std::convert::TryFrom;
     ///
-    /// let num = BigInt::try_from(12345_isize).unwrap();
+    /// let num = BigInt::from(12345_isize);
     /// assert_eq!(num, BigInt::from(12345_u64));
+    ///
+    /// let neg = BigInt::from(-42_isize);
+    /// assert_eq!(neg, BigInt::from("-42"));
     /// ```
-    fn try_from(n: isize) -> Result<Self, Self::Error> {
-        Self::try_from(n as i64)
+    fn from(n: isize) -> Self {
+        Self::from(n as i64)
     }
 }
 
@@ -324,11 +347,11 @@ impl TryFrom<BigInt> for u64 {
 
     /// Tries to convert a `BigInt` to a `u64`.
     ///
-    /// Returns an error if the `BigInt` is too large to fit in a `u64`.
+    /// Returns an error if the `BigInt` is negative or too large to fit in a `u64`.
     ///
     /// # Errors
     ///
-    /// Returns [`DecimalError::InvalidFormat`] if the value exceeds `u64::MAX`.
+    /// Returns [`DecimalError::InvalidFormat`] if the value is negative or exceeds `u64::MAX`.
     ///
     /// # Examples
     ///
@@ -343,8 +366,19 @@ impl TryFrom<BigInt> for u64 {
     /// let too_big = BigInt::from("99999999999999999999999999");
     /// let result = u64::try_from(too_big);
     /// assert!(result.is_err());
+    ///
+    /// let negative = BigInt::from(-42_i64);
+    /// let result = u64::try_from(negative);
+    /// assert!(result.is_err());
     /// ```
     fn try_from(value: BigInt) -> Result<Self, Self::Error> {
+        // Check if negative
+        if value.sign == Sign::Minus {
+            return Err(DecimalError::InvalidFormat(
+                "Cannot convert negative BigInt to unsigned type".to_string(),
+            ));
+        }
+
         // Handle zero case (empty or single 0)
         if value.num.is_empty() || (value.num.len() == 1 && value.num[0] == 0) {
             return Ok(0);
@@ -422,46 +456,50 @@ impl Add for BigInt {
     /// let b = BigInt::from("1");
     /// let c = a + b;
     /// assert_eq!(c, BigInt::from("1000"));
+    ///
+    /// let d = BigInt::from(-50_i64);
+    /// let e = BigInt::from(30_i64);
+    /// assert_eq!(d + e, BigInt::from(-20_i64));
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
-        let self_num = &self.num;
-        let rhs_num = &rhs.num;
-
-        let self_len = self_num.len();
-        let rhs_len = rhs_num.len();
-        let big_len = self_len.max(rhs_len);
-
-        let mut result: Vec<u8> = Vec::with_capacity(big_len + 1);
-        let mut carry = 0;
-
-        // Process digits from right to left (least to most significant)
-        for i in 0..big_len {
-            let self_idx = self_len.saturating_sub(i + 1);
-            let rhs_idx = rhs_len.saturating_sub(i + 1);
-
-            let s_num = if i < self_len { self_num[self_idx] } else { 0 };
-            let r_num = if i < rhs_len { rhs_num[rhs_idx] } else { 0 };
-
-            let mut sum = s_num + r_num + carry;
-
-            if sum >= 10 {
-                carry = 1;
-                sum -= 10;
-            } else {
-                carry = 0;
+        match (self.sign, rhs.sign) {
+            // (+a) + (+b) = +(a+b)
+            (Sign::Plus, Sign::Plus) => {
+                let num = self.add_magnitude(&rhs);
+                BigInt { sign: Sign::Plus, num }
             }
-
-            result.push(sum);
+            // (-a) + (-b) = -(a+b)
+            (Sign::Minus, Sign::Minus) => {
+                let num = self.add_magnitude(&rhs);
+                BigInt { sign: Sign::Minus, num }
+            }
+            // (+a) + (-b) = a - b
+            (Sign::Plus, Sign::Minus) => {
+                match self.compare_magnitude(&rhs) {
+                    Ordering::Greater | Ordering::Equal => {
+                        let num = self.sub_magnitude(&rhs);
+                        BigInt { sign: Sign::Plus, num }
+                    }
+                    Ordering::Less => {
+                        let num = rhs.sub_magnitude(&self);
+                        BigInt { sign: Sign::Minus, num }
+                    }
+                }
+            }
+            // (-a) + (+b) = b - a
+            (Sign::Minus, Sign::Plus) => {
+                match rhs.compare_magnitude(&self) {
+                    Ordering::Greater | Ordering::Equal => {
+                        let num = rhs.sub_magnitude(&self);
+                        BigInt { sign: Sign::Plus, num }
+                    }
+                    Ordering::Less => {
+                        let num = self.sub_magnitude(&rhs);
+                        BigInt { sign: Sign::Minus, num }
+                    }
+                }
+            }
         }
-
-        if carry == 1 {
-            result.push(1);
-        }
-
-        // Reverse once at the end to get most-to-least significant order
-        result.reverse();
-
-        BigInt { num: result }
     }
 }
 
@@ -487,10 +525,6 @@ impl Sub for BigInt {
 
     /// Subtracts one `BigInt` from another.
     ///
-    /// # Panics
-    ///
-    /// Panics if `self` is less than `rhs`, as negative numbers are not supported.
-    ///
     /// # Examples
     ///
     /// ```
@@ -500,53 +534,50 @@ impl Sub for BigInt {
     /// let b = BigInt::from("42");
     /// let c = a - b;
     /// assert_eq!(c, BigInt::from("58"));
+    ///
+    /// let d = BigInt::from(10_i64);
+    /// let e = BigInt::from(20_i64);
+    /// assert_eq!(d - e, BigInt::from(-10_i64));
     /// ```
     fn sub(self, rhs: Self) -> Self::Output {
-        if self < rhs {
-            panic!("Subtraction would result in negative number (not supported)");
-        }
-
-        let self_num = &self.num;
-        let rhs_num = &rhs.num;
-
-        let self_len = self_num.len();
-        let rhs_len = rhs_num.len();
-
-        let mut result: Vec<u8> = Vec::with_capacity(self_len);
-        let mut borrow = 0;
-
-        // Process digits from right to left (least to most significant)
-        for i in 0..self_len {
-            let self_idx = self_len - 1 - i;
-            let rhs_idx = rhs_len.saturating_sub(i + 1);
-
-            let s_num = self_num[self_idx];
-            let r_num = if i < rhs_len { rhs_num[rhs_idx] } else { 0 };
-
-            let mut diff = s_num as i16 - r_num as i16 - borrow;
-
-            if diff < 0 {
-                borrow = 1;
-                diff += 10;
-            } else {
-                borrow = 0;
+        match (self.sign, rhs.sign) {
+            // (+a) - (+b)
+            (Sign::Plus, Sign::Plus) => {
+                match self.compare_magnitude(&rhs) {
+                    Ordering::Greater | Ordering::Equal => {
+                        let num = self.sub_magnitude(&rhs);
+                        BigInt { sign: Sign::Plus, num }
+                    }
+                    Ordering::Less => {
+                        let num = rhs.sub_magnitude(&self);
+                        BigInt { sign: Sign::Minus, num }
+                    }
+                }
             }
-
-            result.push(diff as u8);
+            // (-a) - (-b) = -a + b = b - a
+            (Sign::Minus, Sign::Minus) => {
+                match rhs.compare_magnitude(&self) {
+                    Ordering::Greater | Ordering::Equal => {
+                        let num = rhs.sub_magnitude(&self);
+                        BigInt { sign: Sign::Plus, num }
+                    }
+                    Ordering::Less => {
+                        let num = self.sub_magnitude(&rhs);
+                        BigInt { sign: Sign::Minus, num }
+                    }
+                }
+            }
+            // (+a) - (-b) = a + b
+            (Sign::Plus, Sign::Minus) => {
+                let num = self.add_magnitude(&rhs);
+                BigInt { sign: Sign::Plus, num }
+            }
+            // (-a) - (+b) = -(a + b)
+            (Sign::Minus, Sign::Plus) => {
+                let num = self.add_magnitude(&rhs);
+                BigInt { sign: Sign::Minus, num }
+            }
         }
-
-        // Reverse once at the end to get most-to-least significant order
-        result.reverse();
-
-        // Remove leading zeros - O(n) instead of O(n²)
-        let leading_zeros = result.iter().take_while(|&&d| d == 0).count();
-        let start = if leading_zeros >= result.len() - 1 {
-            result.len() - 1
-        } else {
-            leading_zeros
-        };
-
-        BigInt { num: result[start..].to_vec() }
     }
 }
 
@@ -585,12 +616,23 @@ impl Mul for BigInt {
     /// let b = BigInt::from("456");
     /// let c = a * b;
     /// assert_eq!(c, BigInt::from("56088"));
+    ///
+    /// let d = BigInt::from(-5_i64);
+    /// let e = BigInt::from(3_i64);
+    /// assert_eq!(d * e, BigInt::from(-15_i64));
     /// ```
     fn mul(self, rhs: Self) -> Self::Output {
         // Handle zero cases
         if self.num.is_empty() || rhs.num.is_empty() {
             return BigInt::new();
         }
+
+        // Determine result sign: same signs -> positive, different signs -> negative
+        let result_sign = if self.sign == rhs.sign {
+            Sign::Plus
+        } else {
+            Sign::Minus
+        };
 
         let self_num = &self.num;
         let rhs_num = &rhs.num;
@@ -631,7 +673,7 @@ impl Mul for BigInt {
             leading_zeros
         };
 
-        BigInt { num: final_result[start..].to_vec() }
+        BigInt { sign: result_sign, num: final_result[start..].to_vec() }
     }
 }
 
@@ -678,7 +720,7 @@ impl Shl<usize> for BigInt {
             result.push(0);
         }
 
-        BigInt { num: result }
+        BigInt { sign: self.sign, num: result }
     }
 }
 
@@ -707,7 +749,7 @@ impl Shr<usize> for BigInt {
 
         // Remove 'rhs' digits from the end
         let new_len = self.num.len() - rhs;
-        BigInt { num: self.num[..new_len].to_vec() }
+        BigInt { sign: self.sign, num: self.num[..new_len].to_vec() }
     }
 }
 
@@ -762,7 +804,7 @@ impl Div for BigInt {
                 remainder = if digit == 0 {
                     BigInt::from(0_u64)
                 } else {
-                    BigInt { num: vec![digit] }
+                    BigInt { sign: Sign::Plus, num: vec![digit] }
                 };
             } else {
                 // Otherwise append the digit
@@ -787,7 +829,8 @@ impl Div for BigInt {
             return BigInt::from(0_u64);
         }
 
-        BigInt { num: quotient }
+        // TODO: Implement proper sign handling for division
+        BigInt { sign: Sign::Plus, num: quotient }
     }
 }
 
@@ -841,7 +884,7 @@ impl Rem for BigInt {
                 remainder = if digit == 0 {
                     BigInt::from(0_u64)
                 } else {
-                    BigInt { num: vec![digit] }
+                    BigInt { sign: Sign::Plus, num: vec![digit] }
                 };
             } else {
                 // Otherwise append the digit
@@ -854,6 +897,7 @@ impl Rem for BigInt {
             }
         }
 
+        // TODO: Implement proper sign handling for remainder
         remainder
     }
 }
@@ -871,7 +915,103 @@ impl BigInt {
     /// let num = BigInt::new();
     /// ```
     pub fn new() -> Self {
-        Self { num: Vec::new() }
+        Self { sign: Sign::Plus, num: Vec::new() }
+    }
+
+    /// Helper: Adds two magnitudes (ignoring signs).
+    fn add_magnitude(&self, other: &Self) -> Vec<u8> {
+        let self_num = &self.num;
+        let other_num = &other.num;
+        let self_len = self_num.len();
+        let other_len = other_num.len();
+        let max_len = self_len.max(other_len);
+
+        let mut result: Vec<u8> = Vec::with_capacity(max_len + 1);
+        let mut carry = 0;
+
+        for i in 0..max_len {
+            let self_idx = self_len.saturating_sub(i + 1);
+            let other_idx = other_len.saturating_sub(i + 1);
+
+            let s_digit = if i < self_len { self_num[self_idx] } else { 0 };
+            let o_digit = if i < other_len { other_num[other_idx] } else { 0 };
+
+            let mut sum = s_digit + o_digit + carry;
+
+            if sum >= 10 {
+                carry = 1;
+                sum -= 10;
+            } else {
+                carry = 0;
+            }
+
+            result.push(sum);
+        }
+
+        if carry == 1 {
+            result.push(1);
+        }
+
+        result.reverse();
+        result
+    }
+
+    /// Helper: Subtracts other magnitude from self magnitude (assumes self >= other).
+    fn sub_magnitude(&self, other: &Self) -> Vec<u8> {
+        let self_num = &self.num;
+        let other_num = &other.num;
+        let self_len = self_num.len();
+        let other_len = other_num.len();
+
+        let mut result: Vec<u8> = Vec::new();
+        let mut borrow = 0;
+
+        for i in 0..self_len {
+            let self_idx = self_len - i - 1;
+            let other_idx = other_len.saturating_sub(i + 1);
+
+            let s_digit = self_num[self_idx];
+            let o_digit = if i < other_len { other_num[other_idx] } else { 0 };
+
+            let mut diff = s_digit as i16 - o_digit as i16 - borrow;
+
+            if diff < 0 {
+                diff += 10;
+                borrow = 1;
+            } else {
+                borrow = 0;
+            }
+
+            result.push(diff as u8);
+        }
+
+        result.reverse();
+
+        // Remove leading zeros
+        let leading_zeros = result.iter().take_while(|&&d| d == 0).count();
+        let start = if leading_zeros >= result.len() - 1 {
+            result.len() - 1
+        } else {
+            leading_zeros
+        };
+
+        result[start..].to_vec()
+    }
+
+    /// Helper: Compares magnitudes only (ignoring signs).
+    fn compare_magnitude(&self, other: &Self) -> Ordering {
+        if self.num.len() != other.num.len() {
+            return self.num.len().cmp(&other.num.len());
+        }
+
+        for (s, o) in self.num.iter().zip(other.num.iter()) {
+            match s.cmp(o) {
+                Ordering::Equal => continue,
+                ord => return ord,
+            }
+        }
+
+        Ordering::Equal
     }
 
     /// Checked subtraction. Returns `None` if the result would be negative.
@@ -1413,7 +1553,7 @@ impl BigInt {
 
         let mut result = BigInt::one();
         let mut i = BigInt::from(2_u64);
-        let mut current = self.clone();
+        let current = self.clone();
 
         while i <= current {
             result = result * i.clone();
@@ -1449,7 +1589,7 @@ impl BigInt {
     /// assert_eq!(num, BigInt::from(12345_u64));
     /// ```
     pub fn from_bytes(bytes: &[u8]) -> Self {
-        BigInt { num: bytes.to_vec() }
+        BigInt { sign: Sign::Plus, num: bytes.to_vec() }
     }
 }
 
@@ -1545,10 +1685,18 @@ impl fmt::Display for BigInt {
     ///
     /// let num = BigInt::from("12345");
     /// assert_eq!(format!("{}", num), "12345");
+    ///
+    /// let neg = BigInt::from(-42_i64);
+    /// assert_eq!(format!("{}", neg), "-42");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.num.is_empty() {
             return write!(f, "0");
+        }
+
+        // Show negative sign for negative numbers
+        if self.sign == Sign::Minus {
+            write!(f, "-")?;
         }
 
         for digit in &self.num {
@@ -2019,11 +2167,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Subtraction would result in negative number")]
-    fn test_sub_negative_panic() {
+    fn test_sub_negative_result() {
         let a = BigInt::from("10");
         let b = BigInt::from("20");
-        let _c = a - b;
+        let c = a - b;
+        assert_eq!(c, BigInt::from(-10_i64));
     }
 
     // Multiplication tests
@@ -2129,17 +2277,17 @@ mod tests {
     }
 
     #[test]
-    fn test_try_from_i64_negative() {
-        use std::convert::TryFrom;
-        let result = BigInt::try_from(-123_i64);
-        assert!(result.is_err());
+    fn test_from_i64_negative() {
+        let num = BigInt::from(-123_i64);
+        assert_eq!(num, BigInt::from("-123"));
+        assert_eq!(format!("{}", num), "-123");
     }
 
     #[test]
-    fn test_try_from_i32() {
-        use std::convert::TryFrom;
-        assert_eq!(BigInt::try_from(12345_i32).unwrap(), BigInt::from(12345_u64));
-        assert!(BigInt::try_from(-1_i32).is_err());
+    fn test_from_i32() {
+        assert_eq!(BigInt::from(12345_i32), BigInt::from(12345_u64));
+        assert_eq!(BigInt::from(-1_i32), BigInt::from("-1"));
+        assert_eq!(format!("{}", BigInt::from(-42_i32)), "-42");
     }
 
     // TryFrom<BigInt> for u64 tests
@@ -2288,11 +2436,11 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Subtraction would result in negative number")]
-    fn test_sub_assign_negative_panic() {
+    fn test_sub_assign_negative_result() {
         let mut a = BigInt::from("10");
         let b = BigInt::from("20");
         a -= b;
+        assert_eq!(a, BigInt::from(-10_i64));
     }
 
     // MulAssign tests
