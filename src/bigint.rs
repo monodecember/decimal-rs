@@ -332,22 +332,23 @@ impl Add for BigInt {
     /// assert_eq!(c, BigInt::from("1000"));
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
-        let mut self_num = self.num;
-        let mut rhs_num = rhs.num;
-
-        self_num.reverse();
-        rhs_num.reverse();
+        let self_num = &self.num;
+        let rhs_num = &rhs.num;
 
         let self_len = self_num.len();
         let rhs_len = rhs_num.len();
-        let big_len = if self_len >= rhs_len { self_len } else { rhs_len };
+        let big_len = self_len.max(rhs_len);
 
-        let mut result: Vec<u8> = vec![0; big_len];
+        let mut result: Vec<u8> = Vec::with_capacity(big_len + 1);
         let mut carry = 0;
 
+        // Process digits from right to left (least to most significant)
         for i in 0..big_len {
-            let s_num = if i < self_len { self_num[i] } else { 0 };
-            let r_num = if i < rhs_len { rhs_num[i] } else { 0 };
+            let self_idx = self_len.saturating_sub(i + 1);
+            let rhs_idx = rhs_len.saturating_sub(i + 1);
+
+            let s_num = if i < self_len { self_num[self_idx] } else { 0 };
+            let r_num = if i < rhs_len { rhs_num[rhs_idx] } else { 0 };
 
             let mut sum = s_num + r_num + carry;
 
@@ -358,13 +359,14 @@ impl Add for BigInt {
                 carry = 0;
             }
 
-            result[i] = sum;
+            result.push(sum);
         }
 
         if carry == 1 {
             result.push(1);
         }
 
+        // Reverse once at the end to get most-to-least significant order
         result.reverse();
 
         BigInt { num: result }
@@ -412,21 +414,22 @@ impl Sub for BigInt {
             panic!("Subtraction would result in negative number (not supported)");
         }
 
-        let mut self_num = self.num;
-        let mut rhs_num = rhs.num;
-
-        self_num.reverse();
-        rhs_num.reverse();
+        let self_num = &self.num;
+        let rhs_num = &rhs.num;
 
         let self_len = self_num.len();
         let rhs_len = rhs_num.len();
 
-        let mut result: Vec<u8> = vec![0; self_len];
+        let mut result: Vec<u8> = Vec::with_capacity(self_len);
         let mut borrow = 0;
 
+        // Process digits from right to left (least to most significant)
         for i in 0..self_len {
-            let s_num = self_num[i];
-            let r_num = if i < rhs_len { rhs_num[i] } else { 0 };
+            let self_idx = self_len - 1 - i;
+            let rhs_idx = rhs_len.saturating_sub(i + 1);
+
+            let s_num = self_num[self_idx];
+            let r_num = if i < rhs_len { rhs_num[rhs_idx] } else { 0 };
 
             let mut diff = s_num as i16 - r_num as i16 - borrow;
 
@@ -437,9 +440,10 @@ impl Sub for BigInt {
                 borrow = 0;
             }
 
-            result[i] = diff as u8;
+            result.push(diff as u8);
         }
 
+        // Reverse once at the end to get most-to-least significant order
         result.reverse();
 
         // Remove leading zeros
@@ -503,9 +507,12 @@ impl Mul for BigInt {
         let mut result = vec![0u16; self_len + rhs_len];
 
         // Multiply each digit of self with each digit of rhs
-        for (i, &s_digit) in self_num.iter().rev().enumerate() {
-            for (j, &r_digit) in rhs_num.iter().rev().enumerate() {
-                result[i + j] += (s_digit as u16) * (r_digit as u16);
+        // Process from right to left (least to most significant)
+        for i in 0..self_len {
+            let self_idx = self_len - 1 - i;
+            for j in 0..rhs_len {
+                let rhs_idx = rhs_len - 1 - j;
+                result[i + j] += (self_num[self_idx] as u16) * (rhs_num[rhs_idx] as u16);
             }
         }
 
