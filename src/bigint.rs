@@ -6,7 +6,7 @@
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::ops::{Add, Sub, Mul};
+use std::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign};
 use std::str::FromStr;
 use crate::DecimalError;
 
@@ -371,6 +371,23 @@ impl Add for BigInt {
     }
 }
 
+impl AddAssign for BigInt {
+    /// Performs `+=` operation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let mut a = BigInt::from(100_u64);
+    /// a += BigInt::from(50_u64);
+    /// assert_eq!(a, BigInt::from(150_u64));
+    /// ```
+    fn add_assign(&mut self, rhs: Self) {
+        *self = self.clone() + rhs;
+    }
+}
+
 impl Sub for BigInt {
     type Output = BigInt;
 
@@ -434,6 +451,27 @@ impl Sub for BigInt {
     }
 }
 
+impl SubAssign for BigInt {
+    /// Performs `-=` operation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the result would be negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let mut a = BigInt::from(100_u64);
+    /// a -= BigInt::from(30_u64);
+    /// assert_eq!(a, BigInt::from(70_u64));
+    /// ```
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = self.clone() - rhs;
+    }
+}
+
 impl Mul for BigInt {
     type Output = BigInt;
 
@@ -492,6 +530,170 @@ impl Mul for BigInt {
     }
 }
 
+impl MulAssign for BigInt {
+    /// Performs `*=` operation.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let mut a = BigInt::from(10_u64);
+    /// a *= BigInt::from(5_u64);
+    /// assert_eq!(a, BigInt::from(50_u64));
+    /// ```
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = self.clone() * rhs;
+    }
+}
+
+impl Div for BigInt {
+    type Output = BigInt;
+
+    /// Divides one `BigInt` by another.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(7_u64);
+    /// let c = a / b;
+    /// assert_eq!(c, BigInt::from(14_u64));
+    /// ```
+    fn div(self, rhs: Self) -> Self::Output {
+        // Check for division by zero
+        if rhs.num.is_empty() || (rhs.num.len() == 1 && rhs.num[0] == 0) {
+            panic!("Division by zero");
+        }
+
+        // Handle zero dividend
+        if self.num.is_empty() || (self.num.len() == 1 && self.num[0] == 0) {
+            return BigInt::from(0_u64);
+        }
+
+        // If divisor is larger, result is 0
+        if self < rhs {
+            return BigInt::from(0_u64);
+        }
+
+        // If equal, result is 1
+        if self == rhs {
+            return BigInt::from(1_u64);
+        }
+
+        // Long division algorithm
+        let mut quotient = Vec::new();
+        let mut remainder = BigInt::from(0_u64);
+
+        for &digit in &self.num {
+            // Shift remainder left and add next digit
+            if remainder == BigInt::from(0_u64) {
+                // If remainder is zero, replace it with the new digit
+                remainder = if digit == 0 {
+                    BigInt::from(0_u64)
+                } else {
+                    BigInt { num: vec![digit] }
+                };
+            } else {
+                // Otherwise append the digit
+                remainder.num.push(digit);
+            }
+
+            // Find how many times rhs fits into current remainder
+            let mut count = 0_u8;
+            while remainder >= rhs {
+                remainder = remainder.checked_sub(&rhs).unwrap();
+                count += 1;
+            }
+
+            // Add to quotient (skip leading zeros)
+            if !quotient.is_empty() || count > 0 {
+                quotient.push(count);
+            }
+        }
+
+        // Handle case where quotient is empty (result is 0)
+        if quotient.is_empty() {
+            return BigInt::from(0_u64);
+        }
+
+        BigInt { num: quotient }
+    }
+}
+
+impl Rem for BigInt {
+    type Output = BigInt;
+
+    /// Computes the remainder of `self` / `rhs`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `rhs` is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(7_u64);
+    /// let c = a % b;
+    /// assert_eq!(c, BigInt::from(2_u64));
+    /// ```
+    fn rem(self, rhs: Self) -> Self::Output {
+        // Check for division by zero
+        if rhs.num.is_empty() || (rhs.num.len() == 1 && rhs.num[0] == 0) {
+            panic!("Division by zero");
+        }
+
+        // Handle zero dividend
+        if self.num.is_empty() || (self.num.len() == 1 && self.num[0] == 0) {
+            return BigInt::from(0_u64);
+        }
+
+        // If divisor is larger, remainder is self
+        if self < rhs {
+            return self;
+        }
+
+        // If equal, remainder is 0
+        if self == rhs {
+            return BigInt::from(0_u64);
+        }
+
+        // Long division to find remainder
+        let mut remainder = BigInt::from(0_u64);
+
+        for &digit in &self.num {
+            // Shift remainder left and add next digit
+            if remainder == BigInt::from(0_u64) {
+                // If remainder is zero, replace it with the new digit
+                remainder = if digit == 0 {
+                    BigInt::from(0_u64)
+                } else {
+                    BigInt { num: vec![digit] }
+                };
+            } else {
+                // Otherwise append the digit
+                remainder.num.push(digit);
+            }
+
+            // Subtract rhs as many times as possible
+            while remainder >= rhs {
+                remainder = remainder.checked_sub(&rhs).unwrap();
+            }
+        }
+
+        remainder
+    }
+}
+
 impl BigInt {
     /// Creates a new empty `BigInt`.
     ///
@@ -506,6 +708,29 @@ impl BigInt {
     /// ```
     pub fn new() -> Self {
         Self { num: Vec::new() }
+    }
+
+    /// Checked subtraction. Returns `None` if the result would be negative.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_rs::bigint::BigInt;
+    ///
+    /// let a = BigInt::from(100_u64);
+    /// let b = BigInt::from(42_u64);
+    /// assert_eq!(a.checked_sub(&b), Some(BigInt::from(58_u64)));
+    ///
+    /// let c = BigInt::from(10_u64);
+    /// let d = BigInt::from(20_u64);
+    /// assert_eq!(c.checked_sub(&d), None);  // Would be negative
+    /// ```
+    pub fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+        if self < rhs {
+            None
+        } else {
+            Some(self.clone() - rhs.clone())
+        }
     }
 }
 
@@ -996,5 +1221,299 @@ mod tests {
         let big = BigInt::from(original);
         let converted: u64 = big.try_into().unwrap();
         assert_eq!(original, converted);
+    }
+
+    // checked_sub tests
+    #[test]
+    fn test_checked_sub_valid() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("42");
+        let result = a.checked_sub(&b);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), BigInt::from("58"));
+    }
+
+    #[test]
+    fn test_checked_sub_equal() {
+        let a = BigInt::from("555");
+        let b = BigInt::from("555");
+        let result = a.checked_sub(&b);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_checked_sub_would_be_negative() {
+        let a = BigInt::from("10");
+        let b = BigInt::from("20");
+        let result = a.checked_sub(&b);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_checked_sub_with_borrow() {
+        let a = BigInt::from("1000");
+        let b = BigInt::from("1");
+        let result = a.checked_sub(&b);
+        assert_eq!(result.unwrap(), BigInt::from("999"));
+    }
+
+    #[test]
+    fn test_checked_sub_large() {
+        let a = BigInt::from("123456789");
+        let b = BigInt::from("987654");
+        let result = a.checked_sub(&b);
+        assert_eq!(result.unwrap(), BigInt::from("122469135"));
+    }
+
+    // AddAssign tests
+    #[test]
+    fn test_add_assign_basic() {
+        let mut a = BigInt::from("100");
+        let b = BigInt::from("50");
+        a += b;
+        assert_eq!(a, BigInt::from("150"));
+    }
+
+    #[test]
+    fn test_add_assign_with_carry() {
+        let mut a = BigInt::from("999");
+        let b = BigInt::from("1");
+        a += b;
+        assert_eq!(a, BigInt::from("1000"));
+    }
+
+    #[test]
+    fn test_add_assign_zero() {
+        let mut a = BigInt::from("12345");
+        let b = BigInt::from("0");
+        a += b;
+        assert_eq!(a, BigInt::from("12345"));
+    }
+
+    // SubAssign tests
+    #[test]
+    fn test_sub_assign_basic() {
+        let mut a = BigInt::from("100");
+        let b = BigInt::from("42");
+        a -= b;
+        assert_eq!(a, BigInt::from("58"));
+    }
+
+    #[test]
+    fn test_sub_assign_to_zero() {
+        let mut a = BigInt::from("555");
+        let b = BigInt::from("555");
+        a -= b;
+        assert_eq!(a, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_sub_assign_with_borrow() {
+        let mut a = BigInt::from("1000");
+        let b = BigInt::from("1");
+        a -= b;
+        assert_eq!(a, BigInt::from("999"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Subtraction would result in negative number")]
+    fn test_sub_assign_negative_panic() {
+        let mut a = BigInt::from("10");
+        let b = BigInt::from("20");
+        a -= b;
+    }
+
+    // MulAssign tests
+    #[test]
+    fn test_mul_assign_basic() {
+        let mut a = BigInt::from("12");
+        let b = BigInt::from("5");
+        a *= b;
+        assert_eq!(a, BigInt::from("60"));
+    }
+
+    #[test]
+    fn test_mul_assign_by_zero() {
+        let mut a = BigInt::from("999");
+        let b = BigInt::from("0");
+        a *= b;
+        assert_eq!(a, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_mul_assign_by_one() {
+        let mut a = BigInt::from("12345");
+        let b = BigInt::from("1");
+        a *= b;
+        assert_eq!(a, BigInt::from("12345"));
+    }
+
+    #[test]
+    fn test_mul_assign_large() {
+        let mut a = BigInt::from("123");
+        let b = BigInt::from("456");
+        a *= b;
+        assert_eq!(a, BigInt::from("56088"));
+    }
+
+    // Division tests
+    #[test]
+    fn test_div_basic() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("5");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("20"));
+    }
+
+    #[test]
+    fn test_div_equal() {
+        let a = BigInt::from("555");
+        let b = BigInt::from("555");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("1"));
+    }
+
+    #[test]
+    fn test_div_remainder() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("7");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("14"));
+    }
+
+    #[test]
+    fn test_div_exact() {
+        let a = BigInt::from("144");
+        let b = BigInt::from("12");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("12"));
+    }
+
+    #[test]
+    fn test_div_large() {
+        let a = BigInt::from("123456789");
+        let b = BigInt::from("12345");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("10000"));
+    }
+
+    #[test]
+    fn test_div_smaller_by_larger() {
+        let a = BigInt::from("5");
+        let b = BigInt::from("10");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_div_by_one() {
+        let a = BigInt::from("12345");
+        let b = BigInt::from("1");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("12345"));
+    }
+
+    #[test]
+    fn test_div_zero_by_number() {
+        let a = BigInt::from("0");
+        let b = BigInt::from("5");
+        let c = a / b;
+        assert_eq!(c, BigInt::from("0"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Division by zero")]
+    fn test_div_by_zero_panic() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("0");
+        let _c = a / b;
+    }
+
+    #[test]
+    #[should_panic(expected = "Division by zero")]
+    fn test_div_by_empty_panic() {
+        let a = BigInt::from("100");
+        let b = BigInt::new();
+        let _c = a / b;
+    }
+
+    // Remainder tests
+    #[test]
+    fn test_rem_basic() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("7");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("2"));
+    }
+
+    #[test]
+    fn test_rem_exact_division() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("5");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_rem_equal() {
+        let a = BigInt::from("555");
+        let b = BigInt::from("555");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("0"));
+    }
+
+    #[test]
+    fn test_rem_smaller_by_larger() {
+        let a = BigInt::from("5");
+        let b = BigInt::from("10");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("5"));
+    }
+
+    #[test]
+    fn test_rem_large() {
+        let a = BigInt::from("123456789");
+        let b = BigInt::from("12345");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("6789"));
+    }
+
+    #[test]
+    fn test_rem_by_one() {
+        let a = BigInt::from("12345");
+        let b = BigInt::from("1");
+        let c = a % b;
+        assert_eq!(c, BigInt::from("0"));
+    }
+
+    #[test]
+    #[should_panic(expected = "Division by zero")]
+    fn test_rem_by_zero_panic() {
+        let a = BigInt::from("100");
+        let b = BigInt::from("0");
+        let _c = a % b;
+    }
+
+    // Division + Remainder verification
+    #[test]
+    fn test_div_rem_property() {
+        // For any a, b where b != 0: a == (a / b) * b + (a % b)
+        let a = BigInt::from("12345");
+        let b = BigInt::from("67");
+        let quotient = a.clone() / b.clone();
+        let remainder = a.clone() % b.clone();
+        let reconstructed = quotient * b + remainder;
+        assert_eq!(a, reconstructed);
+    }
+
+    #[test]
+    fn test_div_rem_property_large() {
+        let a = BigInt::from("999999999");
+        let b = BigInt::from("7777");
+        let quotient = a.clone() / b.clone();
+        let remainder = a.clone() % b.clone();
+        let reconstructed = quotient * b + remainder;
+        assert_eq!(a, reconstructed);
     }
 }
